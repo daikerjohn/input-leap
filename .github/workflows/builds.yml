@@ -15,142 +15,14 @@ on:
 
 # Set the build type here
 env:
-  CI_ENV_BUILD_TYPE: Debug
+  CI_ENV_BUILD_TYPE: Release
   B_BUILD_DIR: build
-  B_BUILD_TYPE: Debug
-  INPUTLEAP_VERSION_STAGE: Debug
+  B_BUILD_TYPE: Release
+  INPUTLEAP_VERSION_STAGE: Release
   DEBIAN_FRONTEND: noninteractive
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  linux-build:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
-    container: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: ["ubuntu:18.04", "ubuntu:20.04", "ubuntu:22.04"]
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-
-      - if: matrix.os == 'ubuntu:18.04'
-        name: Add repositories with newer git and cmake
-        run: |
-          apt-get update -y
-          # software-properties-common is needed for add-apt-repository
-          apt-get install -y software-properties-common gpg wget
-          # actions/checkout@v3 wants newer git than what's in default repositories
-          add-apt-repository ppa:git-core/ppa
-          # InputLeap requires at least CMake 3.12.
-          # This mirrors instructions at https://apt.kitware.com
-          wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null \
-            | gpg --dearmor - \
-            > /usr/share/keyrings/kitware-archive-keyring.gpg
-          echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ bionic main' \
-            > /etc/apt/sources.list.d/kitware.list
-
-      - name: Update image and install pre-reqs
-        run: |
-          apt-get update -y
-          apt-get dist-upgrade -y
-          apt-get install -y \
-                  cmake \
-                  g++ \
-                  git \
-                  libavahi-compat-libdnssd-dev \
-                  libcurl4-openssl-dev \
-                  libice-dev \
-                  libsm-dev \
-                  libssl-dev \
-                  libxinerama-dev \
-                  libxrandr-dev \
-                  libxtst-dev \
-                  libxkbcommon-dev \
-                  libglib2.0-dev \
-                  ninja-build \
-                  qtdeclarative5-dev \
-                  qttools5-dev
-
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
-
-      - name: Work around git safe directory check
-        run: git config --global --add safe.directory $GITHUB_WORKSPACE
-
-      - if: matrix.os == 'ubuntu:22.04'
-        name: build libei from git
-        run: |
-            apt-get install -y python3-pip
-            pip3 install meson
-            apt-get install -y libsystemd-dev protobuf-compiler protobuf-c-compiler libprotobuf-c-dev meson git ca-certificates python3-pytest python3-attr python3-dbusmock
-            git clone https://gitlab.freedesktop.org/libinput/libei
-            cd libei
-            meson -Dprefix=/usr _libei_builddir
-            ninja -C _libei_builddir install
-            cd ..
-            rm -rf libei
-
-      - if: matrix.os == 'ubuntu:22.04'
-        name: build libportal from whot/libportal
-        run: |
-            apt-get install -y libglib2.0 gettext dbus meson libgirepository1.0-dev libgtk-3-dev valac python3-pip python3-dbusmock
-            git clone https://github.com/whot/libportal
-            cd libportal
-            git checkout wip/inputcapture
-            meson -Dprefix=/usr -Dbackend-gtk3=enabled -Ddocs=false _libportal_builddir
-            ninja -C _libportal_builddir install
-            cd ..
-            rm -rf libportal
-
-      - if: matrix.os == 'ubuntu:22.04'
-        name: Run the build (with libei)
-        run: sh -x ./clean_build.sh
-        env:
-            VERBOSE: 1
-            B_CMAKE_FLAGS: -DINPUTLEAP_BUILD_LIBEI=TRUE
-
-      - if: matrix.os != 'ubuntu:22.04'
-        name: Run the build
-        run: sh -x ./clean_build.sh
-        env:
-            VERBOSE: 1
-            B_CMAKE_FLAGS: -DINPUTLEAP_BUILD_LIBEI=FALSE
-
-      - name: Run the tests
-        run: |
-            cd ${B_BUILD_DIR}
-            ctest --verbose
-
-  mac-build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [macos-11, macos-12]
-
-    env:
-      VERBOSE: 1
-      TERM: xterm-256color
-
-    steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
-
-      # Runs a set of commands using the runners shell
-      - name: Setup the image
-        run: |
-          brew install qt5
-          brew install ninja
-      - name: Run the build
-        run: env B_CMAKE_FLAGS="-DCMAKE_UNITY_BUILD=1" sh -x ./clean_build.sh
-      - uses: actions/upload-artifact@v3
-        with:
-          name: Publish the DMG for ${{ matrix.os }}
-          path: ./build/bundle/*.dmg
-          if-no-files-found: warn
-        if: ${{ env.B_BUILD_TYPE == 'Release' }}
-
   win-build-2019:
     runs-on: windows-2019
 
